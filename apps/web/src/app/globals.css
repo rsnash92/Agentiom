@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 min-h-screen overflow-x-hidden;
+  }
+}
+
+@layer components {
+  .nav-button {
+    @apply relative text-gray-900 text-sm font-medium px-4 py-2 border-[1.5px] border-gray-900 transition-all;
+  }
+
+  .nav-button::before,
+  .nav-button::after {
+    content: '';
+    @apply absolute w-[6px] h-[6px] border-[1.5px] border-gray-900 transition-all;
+  }
+
+  .nav-button::before {
+    @apply -top-1 -left-1 border-r-0 border-b-0;
+  }
+
+  .nav-button::after {
+    @apply -bottom-1 -right-1 border-l-0 border-t-0;
+  }
+
+  .nav-button:hover {
+    @apply bg-gray-900 text-white;
+  }
+
+  .terminal-cursor {
+    @apply inline-block w-2 h-4 bg-primary ml-0.5 animate-blink;
+  }
+
+  .floating-pixel {
+    @apply absolute bg-primary opacity-20;
+    animation: floatUp linear infinite;
+  }
+
+  .network-node {
+    @apply absolute w-12 h-12 rounded-full flex items-center justify-center text-xl;
+    animation: pulse 3s ease-in-out infinite;
+  }
+
+  .agent-avatar {
+    @apply w-9 h-9 rounded-lg flex items-center justify-center text-white font-semibold text-sm;
+  }
+
+  .agent-avatar-blue { @apply bg-gradient-to-br from-blue-500 to-purple-500; }
+  .agent-avatar-orange { @apply bg-gradient-to-br from-orange-500 to-red-500; }
+  .agent-avatar-green { @apply bg-gradient-to-br from-emerald-500 to-blue-500; }
+  .agent-avatar-purple { @apply bg-gradient-to-br from-purple-500 to-pink-500; }
+  .agent-avatar-cyan { @apply bg-gradient-to-br from-cyan-500 to-blue-500; }
+  .agent-avatar-pink { @apply bg-gradient-to-br from-pink-500 to-orange-500; }
+}

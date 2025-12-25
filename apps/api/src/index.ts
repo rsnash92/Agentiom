@@ -15,10 +15,19 @@ const log = createLogger('api');
 // Environment validation
 const DATABASE_URL = process.env.DATABASE_URL ?? 'file:local.db';
 const JWT_SECRET = process.env.JWT_SECRET;
+const FLY_API_TOKEN = process.env.FLY_API_TOKEN;
+const FLY_APP_NAME = process.env.FLY_APP_NAME;
 
 if (!JWT_SECRET) {
   log.error('JWT_SECRET environment variable is required');
   process.exit(1);
+}
+
+// Log provider status
+if (FLY_API_TOKEN && FLY_APP_NAME) {
+  log.info({ appName: FLY_APP_NAME }, 'Fly.io credentials configured');
+} else {
+  log.warn('FLY_API_TOKEN or FLY_APP_NAME not set, using mock providers');
 }
 
 // Initialize database
@@ -27,7 +36,10 @@ const db = createDatabase(DATABASE_URL);
 // Initialize services
 const authService = new AuthService(db, JWT_SECRET);
 const agentService = new AgentService(db);
-const deployService = new DeployService(db); // Uses mock providers by default
+const deployService = new DeployService(db, {
+  flyApiToken: FLY_API_TOKEN,
+  flyAppName: FLY_APP_NAME,
+});
 
 // Create app
 const app = new Hono();

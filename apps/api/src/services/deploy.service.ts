@@ -17,13 +17,16 @@ import type {
   LogEntry,
   LogOptions,
 } from '@agentiom/providers';
+import { FlyComputeProvider, FlyStorageProvider } from '@agentiom/providers';
 import { ProviderError } from '@agentiom/shared';
 import { createLogger } from '@agentiom/logger';
 import type { Agent } from './agent.service';
 
 const logger = createLogger('deploy-service');
 
-const AGENT_IMAGE = 'agentiom/agent-base:latest';
+// Use a simple Python image that exists on Docker Hub for testing
+// TODO: Replace with custom agentiom/agent-base image when available
+const AGENT_IMAGE = 'python:3.11-slim';
 const BASE_DOMAIN = 'agentiom.dev';
 const VOLUME_MOUNT_PATH = '/data';
 
@@ -33,6 +36,86 @@ export interface ProviderSet {
   compute: IComputeProvider;
   storage: IStorageProvider;
   dns: IDNSProvider;
+}
+
+export interface ProviderConfig {
+  flyApiToken?: string;
+  flyAppName?: string;
+}
+
+/**
+ * Create real Fly.io providers if configured, otherwise mock DNS
+ */
+function createFlyProviders(config: ProviderConfig): ProviderSet | null {
+  if (!config.flyApiToken || !config.flyAppName) {
+    return null;
+  }
+
+  logger.info({ appName: config.flyAppName }, 'Using real Fly.io providers');
+
+  return {
+    compute: new FlyComputeProvider(config.flyApiToken, config.flyAppName),
+    storage: new FlyStorageProvider(config.flyApiToken, config.flyAppName),
+    // Use mock DNS for now (skip Cloudflare setup)
+    dns: createMockDNS(),
+  };
+}
+
+/**
+ * Create mock DNS provider
+ */
+function createMockDNS(): IDNSProvider {
+  return {
+    async createRecord(config) {
+      logger.info({ config }, '[MOCK DNS] Creating DNS record');
+      return {
+        id: `mock-dns-${Date.now()}`,
+        name: config.name,
+        fullName: `${config.name}.${BASE_DOMAIN}`,
+        type: config.type,
+        value: config.value,
+        ttl: config.ttl ?? 300,
+        proxied: config.proxied ?? false,
+        createdAt: new Date(),
+      };
+    },
+    async getRecord() {
+      return null;
+    },
+    async getRecordById(recordId) {
+      return {
+        id: recordId,
+        name: 'mock-record',
+        fullName: `mock-record.${BASE_DOMAIN}`,
+        type: 'CNAME' as const,
+        value: 'mock.fly.dev',
+        ttl: 300,
+        proxied: false,
+        createdAt: new Date(),
+      };
+    },
+    async updateRecord(recordId, value) {
+      return {
+        id: recordId,
+        name: 'mock-record',
+        fullName: `mock-record.${BASE_DOMAIN}`,
+        type: 'CNAME' as const,
+        value,
+        ttl: 300,
+        proxied: false,
+        createdAt: new Date(),
+      };
+    },
+    async deleteRecord(recordId) {
+      logger.info({ recordId }, '[MOCK DNS] Deleting DNS record');
+    },
+    async listRecords() {
+      return [];
+    },
+    async isAvailable() {
+      return true;
+    },
+  };
 }
 
 /**
@@ -222,17 +305,22 @@ function createMockProviders(): ProviderSet {
 export class DeployService {
   private providers: ProviderSet;
   private isMock: boolean;
+  private flyAppName?: string;
 
   constructor(
     private db: DatabaseClient,
-    providers?: ProviderSet
+    config?: ProviderConfig
   ) {
-    if (providers) {
-      this.providers = providers;
+    // Try to create real Fly.io providers
+    const flyProviders = config ? createFlyProviders(config) : null;
+
+    if (flyProviders) {
+      this.providers = flyProviders;
       this.isMock = false;
+      this.flyAppName = config?.flyAppName;
     } else {
       // Use mock providers if no real providers configured
-      logger.warn('No providers configured, using mock providers');
+      logger.warn('No Fly.io credentials configured, using mock providers');
       this.providers = createMockProviders();
       this.isMock = true;
     }
@@ -498,8 +586,11 @@ export class DeployService {
   private async createVolume(agent: Agent): Promise<Volume> {
     logger.info({ agentId: agent.id }, 'Creating volume');
 
+    // Fly.io volume names only allow lowercase alphanumeric and underscores
+    const volumeName = `vol_${agent.slug.replace(/-/g, '_')}`;
+
     return this.providers.storage.createVolume({
-      name: `vol-${agent.slug}`,
+      name: volumeName,
       region: agent.region,
       sizeGb: agent.storageSizeGb,
     });
@@ -538,7 +629,11 @@ export class DeployService {
   private async createDNSRecord(agent: Agent, machine: Machine): Promise<DNSRecord> {
     logger.info({ agentId: agent.id }, 'Creating DNS record');
 
-    const targetUrl = machine.publicUrl ?? `${agent.slug}.fly.dev`;
+    // For real Fly.io, use the app's fly.dev URL
+    // Machine doesn't have a direct public URL, the app does
+    const targetUrl = this.flyAppName
+      ? `${this.flyAppName}.fly.dev`
+      : (machine.publicUrl ?? `${agent.slug}.fly.dev`);
 
     return this.providers.dns.createRecord({
       name: agent.slug,
@@ -546,6 +641,18 @@ export class DeployService {
       value: targetUrl,
       proxied: true,
     });
+  }
+
+  /**
+   * Get the public URL for an agent
+   */
+  private getAgentUrl(agent: Agent): string {
+    // When using real Fly.io, the URL is based on the app name
+    if (!this.isMock && this.flyAppName) {
+      return `https://${this.flyAppName}.fly.dev`;
+    }
+    // Mock URL
+    return `https://${agent.slug}.${BASE_DOMAIN}`;
   }
 
   private async updateAgentStatus(agentId: string, status: Agent['status']): Promise<void> {

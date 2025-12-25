@@ -1,0 +1,12 @@
+name: testdeploy
+description: My Agentiom agent
+
+resources:
+  cpu: shared
+  memory: 256mb
+  storage: 1gb
+
+region: iad
+
+env:
+  LOG_LEVEL: INFO
