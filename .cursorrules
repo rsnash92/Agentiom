@@ -1,0 +1,331 @@
+You are an expert full-stack developer working on Agentiom, an open-source platform for deploying stateful AI agents. You have deep expertise in TypeScript, Bun, Hono, Next.js, React, and distributed systems.
+
+## Project Context
+
+Agentiom enables developers to deploy persistent, stateful AI agents that:
+- Have real Linux containers with persistent storage
+- Sleep when idle and wake on triggers (email, cron, webhooks, API)
+- Maintain memory and state across sessions
+- Access browser automation, email, and other tools
+
+## Tech Stack
+
+- **Runtime**: Bun
+- **Build System**: Turborepo
+- **API Framework**: Hono (apps/api)
+- **Frontend**: Next.js 15 with App Router (apps/app, apps/web)
+- **UI Components**: Shadcn/ui with Tailwind CSS
+- **Database**: Turso (SQLite) with Drizzle ORM
+- **Validation**: Zod
+- **Authentication**: Custom JWT + API tokens
+- **Infrastructure**: Fly.io (compute), Cloudflare (DNS)
+- **Email**: Resend + React Email
+- **Background Jobs**: Trigger.dev
+- **Rate Limiting**: Upstash Redis
+- **Analytics**: OpenPanel
+- **Payments**: Stripe
+- **Monitoring**: Sentry
+- **Linting/Formatting**: Biome
+
+## Project Structure
+
+```
+agentiom/
+├── apps/
+│   ├── api/          # Hono API (control plane)
+│   ├── app/          # Next.js dashboard
+│   ├── web/          # Next.js marketing site
+│   └── cli/          # CLI tool
+├── packages/
+│   ├── providers/    # Infrastructure abstraction (CRITICAL)
+│   ├── db/           # Drizzle schema & client
+│   ├── shared/       # Types, schemas, utilities
+│   ├── ui/           # Shadcn components
+│   ├── email/        # Email templates
+│   ├── jobs/         # Background jobs
+│   ├── kv/           # Rate limiting
+│   ├── analytics/    # Analytics
+│   └── logger/       # Logging
+└── tooling/
+    └── typescript/   # Shared TS configs
+```
+
+## Critical Architecture: Provider Abstraction
+
+The `packages/providers` package is the MOST IMPORTANT abstraction. It allows infrastructure to be swapped without changing application code.
+
+### Provider Interfaces
+
+Always implement against interfaces, never directly against Fly.io or other providers:
+
+```typescript
+// packages/providers/src/interfaces/compute.ts
+interface IComputeProvider {
+  createMachine(config: MachineConfig): Promise<Machine>;
+  getMachine(id: string): Promise<Machine | null>;
+  startMachine(id: string): Promise<Machine>;
+  stopMachine(id: string): Promise<Machine>;
+  destroyMachine(id: string): Promise<void>;
+  execCommand(id: string, command: string[]): Promise<ExecResult>;
+  streamLogs(id: string, options?: LogOptions): AsyncIterable<LogEntry>;
+}
+```
+
+### Using Providers
+
+```typescript
+// In services, inject via constructor
+class AgentService {
+  constructor(
+    private db: Database,
+    private providers: ProviderManager
+  ) {}
+
+  async deploy(agentId: string) {
+    // Use provider interface, not Fly.io directly
+    const machine = await this.providers.compute.createMachine({...});
+    const volume = await this.providers.storage.createVolume({...});
+    // ...
+  }
+}
+```
+
+## Code Style Guidelines
+
+### TypeScript
+
+- Use `type` for object shapes, `interface` for contracts that will be implemented
+- Prefer `const` assertions and `as const` for literal types
+- Use Zod schemas for runtime validation, infer types from them
+- Always handle errors explicitly, never silent catches
+
+```typescript
+// Good
+const result = await someAsync().catch((error) => {
+  logger.error({ error }, 'Failed to do something');
+  throw new AgentiomError('operation_failed', 'Something went wrong');
+});
+
+// Bad
+try {
+  const result = await someAsync();
+} catch (e) {
+  // silent or generic handling
+}
+```
+
+### API Routes (Hono)
+
+```typescript
+// apps/api/src/routes/agents.ts
+import { Hono } from 'hono';
+import { zValidator } from '@hono/zod-validator';
+import { createAgentSchema } from '@agentiom/shared';
+
+export function createAgentRoutes(agentService: AgentService) {
+  const app = new Hono();
+
+  app.post('/', zValidator('json', createAgentSchema), async (c) => {
+    const user = c.get('user');
+    const data = c.req.valid('json');
+    const agent = await agentService.create(user.id, data);
+    return c.json({ agent }, 201);
+  });
+
+  return app;
+}
+```
+
+### React Components (Next.js)
+
+- Use Server Components by default
+- Use `'use client'` only when needed (interactivity, hooks)
+- Colocate components with their routes when possible
+- Use Shadcn/ui components, don't reinvent
+
+```typescript
+// Server Component (default)
+async function AgentList() {
+  const agents = await getAgents();
+  return <AgentTable agents={agents} />;
+}
+
+// Client Component (when needed)
+'use client';
+function AgentActions({ agentId }: { agentId: string }) {
+  const [isLoading, setIsLoading] = useState(false);
+  // ...
+}
+```
+
+### Database (Drizzle)
+
+```typescript
+// packages/db/src/schema.ts
+import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { createId } from '@paralleldrive/cuid2';
+
+export const agents = sqliteTable('agents', {
+  id: text('id').primaryKey().$defaultFn(() => createId()),
+  userId: text('user_id').notNull().references(() => users.id),
+  name: text('name').notNull(),
+  status: text('status', { enum: ['pending', 'running', 'stopped'] }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+```
+
+### Error Handling
+
+Use typed errors from `@agentiom/shared`:
+
+```typescript
+import { AgentiomError, NotFoundError, ValidationError } from '@agentiom/shared';
+
+// Throw specific errors
+throw new NotFoundError('Agent', agentId);
+throw new ValidationError('Invalid configuration', { field: 'name' });
+throw new AgentiomError('provider_error', 'Fly.io API failed', 502);
+```
+
+## Naming Conventions
+
+- **Files**: kebab-case (`agent-service.ts`, `create-agent.tsx`)
+- **Components**: PascalCase (`AgentCard`, `DeployButton`)
+- **Functions/Variables**: camelCase (`createAgent`, `agentService`)
+- **Types/Interfaces**: PascalCase (`Agent`, `IComputeProvider`)
+- **Constants**: SCREAMING_SNAKE_CASE (`MAX_AGENTS`, `DEFAULT_REGION`)
+- **Database tables**: snake_case (`api_tokens`, `user_agents`)
+- **API routes**: kebab-case (`/agents/:agent-id/deployments`)
+
+## Package Naming
+
+All packages use the `@agentiom/` namespace:
+
+- `@agentiom/api` — Control plane API
+- `@agentiom/app` — Dashboard
+- `@agentiom/web` — Marketing site
+- `@agentiom/cli` — CLI tool
+- `@agentiom/providers` — Infrastructure abstraction
+- `@agentiom/db` — Database
+- `@agentiom/shared` — Shared utilities
+- `@agentiom/ui` — UI components
+
+## Testing
+
+- Use Bun's built-in test runner
+- Mock external services (Fly.io, etc.) in unit tests
+- Use real database for integration tests (Turso local)
+
+```typescript
+import { describe, test, expect, mock } from 'bun:test';
+
+describe('AgentService', () => {
+  test('creates agent with correct config', async () => {
+    const mockProvider = {
+      createMachine: mock(() => Promise.resolve({ id: 'machine-1' })),
+    };
+    // ...
+  });
+});
+```
+
+## Environment Variables
+
+Never hardcode secrets. Use environment variables:
+
+```typescript
+// packages/shared/src/config.ts
+import { z } from 'zod';
+
+const envSchema = z.object({
+  DATABASE_URL: z.string(),
+  FLY_API_TOKEN: z.string(),
+  // ...
+});
+
+export const env = envSchema.parse(process.env);
+```
+
+## Git Commit Messages
+
+Use conventional commits:
+
+- `feat:` — New feature
+- `fix:` — Bug fix
+- `docs:` — Documentation
+- `refactor:` — Code refactoring
+- `test:` — Tests
+- `chore:` — Maintenance
+
+Example: `feat(api): add agent deployment endpoint`
+
+## Key Principles
+
+1. **Provider Agnostic**: Always use provider interfaces, never call Fly.io directly
+2. **Type Safety**: Use TypeScript strictly, validate at boundaries with Zod
+3. **Error Handling**: Use typed errors, log with context
+4. **Simple First**: Build the simplest thing that works, iterate
+5. **Observable**: Log everything important, use structured logging
+6. **Testable**: Design for testability, inject dependencies
+
+## When Building Features
+
+1. Start with the Zod schema (validation)
+2. Add database schema if needed (Drizzle)
+3. Implement the service layer
+4. Add API route
+5. Build UI if needed
+6. Write tests
+7. Update documentation
+
+## Common Patterns
+
+### Service Layer
+
+```typescript
+export class AgentService {
+  constructor(
+    private db: Database,
+    private providers: ProviderManager,
+    private logger: Logger
+  ) {}
+
+  async create(userId: string, data: CreateAgentInput): Promise<Agent> {
+    this.logger.info({ userId, name: data.name }, 'Creating agent');
+    
+    // Validate
+    // Create in DB
+    // Provision infrastructure
+    // Return result
+  }
+}
+```
+
+### API Response Format
+
+```typescript
+// Success
+{ "agent": { ... } }
+{ "agents": [...] }
+
+// Error
+{ "error": { "code": "not_found", "message": "Agent not found" } }
+```
+
+### Async Operations
+
+Use proper async patterns:
+
+```typescript
+// Good: Promise.all for parallel operations
+const [machine, volume] = await Promise.all([
+  providers.compute.createMachine(config),
+  providers.storage.createVolume(volumeConfig),
+]);
+
+// Good: Sequential when order matters
+const machine = await providers.compute.createMachine(config);
+await providers.compute.attachVolume(machine.id, volume.id);
+```
+
+Remember: The goal is to build infrastructure for stateful AI agents. Keep the provider abstraction clean so we can migrate away from Fly.io if needed. Build in public, ship fast, iterate.

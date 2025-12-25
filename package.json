@@ -1,0 +1,48 @@
+{
+  "name": "agentiom",
+  "version": "0.0.1",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo build",
+    "clean": "turbo clean",
+    "clean:workspaces": "turbo clean",
+    "dev": "turbo dev --parallel",
+    "dev:api": "turbo dev --filter=@agentiom/api",
+    "dev:app": "turbo dev --filter=@agentiom/app",
+    "dev:web": "turbo dev --filter=@agentiom/web",
+    "dev:docs": "turbo dev --filter=@agentiom/docs",
+    "dev:cli": "turbo dev --filter=@agentiom/cli",
+    "start": "turbo start",
+    "start:api": "turbo start --filter=@agentiom/api",
+    "start:app": "turbo start --filter=@agentiom/app",
+    "start:web": "turbo start --filter=@agentiom/web",
+    "test": "turbo test --parallel",
+    "test:watch": "turbo test:watch --parallel",
+    "lint": "turbo lint && manypkg check",
+    "lint:fix": "turbo lint:fix",
+    "lint:repo": "bunx sherif@latest",
+    "lint:repo:fix": "bunx sherif@latest --fix",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "typecheck": "turbo typecheck",
+    "db:generate": "turbo db:generate --filter=@agentiom/db",
+    "db:migrate": "turbo db:migrate --filter=@agentiom/db",
+    "db:push": "turbo db:push --filter=@agentiom/db",
+    "db:seed": "turbo db:seed --filter=@agentiom/db",
+    "db:studio": "turbo db:studio --filter=@agentiom/db"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@manypkg/cli": "^0.21.4",
+    "turbo": "^2.3.0",
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "bun@1.1.38",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
