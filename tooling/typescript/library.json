@@ -3,6 +3,7 @@
   "display": "Library",
   "extends": "./base.json",
   "compilerOptions": {
+    "noEmit": false,
     "declaration": true,
     "declarationMap": true,
     "outDir": "./dist"
