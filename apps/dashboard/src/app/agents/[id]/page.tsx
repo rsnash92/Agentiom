@@ -79,6 +79,33 @@ export default function AgentDetailPage() {
     }
   };
 
+  const handleWake = async () => {
+    if (!agent) return;
+    setActionLoading(true);
+    try {
+      const result = await api.wakeAgent(agent.id);
+      console.log(`Agent woke in ${result.latencyMs}ms`);
+      await fetchAgent();
+    } catch (error) {
+      console.error('Failed to wake agent:', error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSleep = async () => {
+    if (!agent) return;
+    setActionLoading(true);
+    try {
+      await api.sleepAgent(agent.id);
+      await fetchAgent();
+    } catch (error) {
+      console.error('Failed to sleep agent:', error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleStop = async () => {
     if (!agent) return;
     setActionLoading(true);
@@ -175,18 +202,27 @@ export default function AgentDetailPage() {
                   Deploy
                 </button>
               )}
-              {(agent.status === 'stopped' || agent.status === 'sleeping') && (
+              {agent.status === 'stopped' && (
                 <button
                   onClick={handleStart}
                   disabled={actionLoading}
                   className="text-sm px-4 py-2 bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50"
                 >
-                  {agent.status === 'sleeping' ? 'Wake' : 'Start'}
+                  Start
+                </button>
+              )}
+              {agent.status === 'sleeping' && (
+                <button
+                  onClick={handleWake}
+                  disabled={actionLoading}
+                  className="text-sm px-4 py-2 bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50"
+                >
+                  Wake
                 </button>
               )}
               {agent.status === 'running' && (
                 <button
-                  onClick={handleStop}
+                  onClick={handleSleep}
                   disabled={actionLoading}
                   className="text-sm px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"
                 >

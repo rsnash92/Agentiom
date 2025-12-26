@@ -24,12 +24,14 @@ function formatTimeAgo(dateStr: string): string {
 interface AgentCardProps {
   agent: Agent;
   onStart: () => void;
+  onWake: () => void;
+  onSleep: () => void;
   onStop: () => void;
   onDelete: () => void;
   loading: boolean;
 }
 
-function AgentCard({ agent, onStart, onStop, onDelete, loading }: AgentCardProps) {
+function AgentCard({ agent, onStart, onWake, onSleep, onStop, onDelete, loading }: AgentCardProps) {
   const statusColors: Record<string, string> = {
     running: 'bg-emerald-100 text-emerald-700',
     sleeping: 'bg-blue-100 text-blue-700',
@@ -82,18 +84,27 @@ function AgentCard({ agent, onStart, onStop, onDelete, loading }: AgentCardProps
       )}
 
       <div className="flex items-center gap-2">
-        {(agent.status === 'stopped' || agent.status === 'sleeping') && (
+        {agent.status === 'stopped' && (
           <button
             onClick={onStart}
             disabled={loading}
             className="text-xs px-3 py-1.5 bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50"
           >
-            {agent.status === 'sleeping' ? 'Wake' : 'Start'}
+            Start
+          </button>
+        )}
+        {agent.status === 'sleeping' && (
+          <button
+            onClick={onWake}
+            disabled={loading}
+            className="text-xs px-3 py-1.5 bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50"
+          >
+            Wake
           </button>
         )}
         {agent.status === 'running' && (
           <button
-            onClick={onStop}
+            onClick={onSleep}
             disabled={loading}
             className="text-xs px-3 py-1.5 bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"
           >
@@ -155,6 +166,31 @@ export default function AgentsPage() {
       await fetchAgents();
     } catch (error) {
       console.error('Failed to start agent:', error);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleWake = async (id: string) => {
+    setActionLoading(id);
+    try {
+      const result = await api.wakeAgent(id);
+      console.log(`Agent woke in ${result.latencyMs}ms`);
+      await fetchAgents();
+    } catch (error) {
+      console.error('Failed to wake agent:', error);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleSleep = async (id: string) => {
+    setActionLoading(id);
+    try {
+      await api.sleepAgent(id);
+      await fetchAgents();
+    } catch (error) {
+      console.error('Failed to sleep agent:', error);
     } finally {
       setActionLoading(null);
     }
@@ -226,6 +262,8 @@ export default function AgentsPage() {
                 key={agent.id}
                 agent={agent}
                 onStart={() => handleStart(agent.id)}
+                onWake={() => handleWake(agent.id)}
+                onSleep={() => handleSleep(agent.id)}
                 onStop={() => handleStop(agent.id)}
                 onDelete={() => handleDelete(agent.id)}
                 loading={actionLoading === agent.id}

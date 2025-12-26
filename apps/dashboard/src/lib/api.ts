@@ -131,6 +131,25 @@ class ApiClient {
     });
   }
 
+  async wakeAgent(id: string) {
+    return this.fetch<{ success: boolean; status: string; previousStatus: string; latencyMs: number }>(
+      `/agents/${id}/wake`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ triggerType: 'dashboard' }),
+      }
+    );
+  }
+
+  async sleepAgent(id: string) {
+    return this.fetch<{ success: boolean; status: string; previousStatus: string }>(
+      `/agents/${id}/sleep`,
+      {
+        method: 'POST',
+      }
+    );
+  }
+
   async getAgentLogs(id: string) {
     return this.fetch<{ logs: LogEntry[] }>(`/agents/${id}/logs`);
   }
