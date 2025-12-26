@@ -1,10 +1,7 @@
-// Vercel Edge Function handler for Hono
-// Using .js to avoid Vercel's TypeScript type checking issues
-import { handle } from 'hono/vercel';
-import { app } from '../src/index.js';
+// Vercel Serverless Function handler
+// Import the pre-built bundle from dist
+import bundle from '../dist/index.js';
 
-export const config = {
-  runtime: 'edge',
-};
-
-export default handle(app);
+// The bundle exports { port, fetch } for Bun runtime
+// Re-export the fetch handler for Vercel
+export default bundle.fetch;
