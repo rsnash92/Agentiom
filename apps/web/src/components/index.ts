@@ -5,4 +5,6 @@ export { AgentCard } from './agent-card';
 export { NetworkViz } from './network-viz';
 export { FeatureCard } from './feature-card';
 export { Footer } from './footer';
+export { CornerBorderBox } from './corner-border-box';
+export { AnimatedTerminal } from './animated-terminal';
 export * from './icons';
