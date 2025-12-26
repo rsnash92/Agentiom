@@ -35,6 +35,7 @@ export default function AgentDetailPage() {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
@@ -43,24 +44,31 @@ export default function AgentDetailPage() {
     }
   }, [user, authLoading, router]);
 
-  const fetchAgent = async () => {
+  const fetchAgent = async (skipLogs = false) => {
     try {
       const { agent } = await api.getAgent(agentId);
       setAgent(agent);
 
       // Fetch logs if agent has been deployed (has machineId)
-      if (agent.machineId) {
-        try {
-          const { logs } = await api.getAgentLogs(agentId);
-          setLogs(logs);
-        } catch (logError) {
-          console.error('Failed to fetch logs:', logError);
-        }
+      if (agent.machineId && !skipLogs) {
+        await fetchLogs();
       }
     } catch (error) {
       console.error('Failed to fetch agent:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchLogs = async () => {
+    setLogsLoading(true);
+    try {
+      const { logs } = await api.getAgentLogs(agentId);
+      setLogs(logs);
+    } catch (logError) {
+      console.error('Failed to fetch logs:', logError);
+    } finally {
+      setLogsLoading(false);
     }
   };
 
@@ -89,7 +97,10 @@ export default function AgentDetailPage() {
     try {
       const result = await api.wakeAgent(agent.id);
       console.log(`Agent woke in ${result.latencyMs}ms`);
-      await fetchAgent();
+      // Update agent status immediately
+      await fetchAgent(true);
+      // Wait a moment for logs to be available, then fetch them
+      setTimeout(() => fetchLogs(), 2000);
     } catch (error) {
       console.error('Failed to wake agent:', error);
     } finally {
@@ -303,14 +314,19 @@ export default function AgentDetailPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-gray-900">Recent Logs</h2>
               <button
-                onClick={fetchAgent}
-                className="text-xs text-primary hover:underline"
+                onClick={fetchLogs}
+                disabled={logsLoading}
+                className="text-xs text-primary hover:underline disabled:opacity-50"
               >
-                Refresh
+                {logsLoading ? 'Loading...' : 'Refresh'}
               </button>
             </div>
             <div className="font-mono text-xs bg-gray-900 text-gray-300 p-4 rounded max-h-64 overflow-y-auto">
-              {!agent.machineId ? (
+              {logsLoading ? (
+                <p className="text-gray-500 animate-pulse">
+                  Loading logs...
+                </p>
+              ) : !agent.machineId ? (
                 <p className="text-gray-500">
                   Deploy the agent to see logs.
                 </p>
