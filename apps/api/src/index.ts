@@ -137,7 +137,11 @@ app.route('/demo', demoRoutes);
 
 log.info('API running on http://localhost:3000');
 
+// Export for Bun runtime
 export default {
   port: 3000,
   fetch: app.fetch,
 };
+
+// Export app for Vercel
+export { app };
