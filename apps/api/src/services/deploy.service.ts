@@ -303,7 +303,7 @@ function createMockProviders(): ProviderSet {
 }
 
 export class DeployService {
-  private providers: ProviderSet;
+  public providers: ProviderSet;
   private isMock: boolean;
   private flyAppName?: string;
 

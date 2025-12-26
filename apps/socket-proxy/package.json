@@ -1,5 +1,5 @@
 {
-  "name": "@agentiom/api",
+  "name": "@agentiom/socket-proxy",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -10,14 +10,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@agentiom/db": "workspace:*",
-    "@agentiom/logger": "workspace:*",
-    "@agentiom/providers": "workspace:*",
     "@agentiom/shared": "workspace:*",
-    "@hono/zod-validator": "^0.4.1",
-    "drizzle-orm": "^0.36.0",
-    "hono": "^4.6.0",
-    "zod": "^4.2.1"
+    "@slack/socket-mode": "^2.0.0",
+    "@slack/web-api": "^7.0.0",
+    "discord.js": "^14.14.0",
+    "grammy": "^1.21.0",
+    "hono": "^4.6.0"
   },
   "devDependencies": {
     "@agentiom/typescript-config": "workspace:*",

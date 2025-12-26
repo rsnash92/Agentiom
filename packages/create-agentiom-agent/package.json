@@ -1,0 +1,38 @@
+{
+  "name": "create-agentiom-agent",
+  "version": "0.1.0",
+  "description": "Scaffold a new Agentiom agent project",
+  "type": "module",
+  "bin": {
+    "create-agentiom-agent": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target node",
+    "prepublishOnly": "bun run build"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.7.2"
+  },
+  "keywords": [
+    "agentiom",
+    "agent",
+    "ai",
+    "create",
+    "scaffold",
+    "template"
+  ],
+  "author": "Agentiom",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agentiom/agentiom.git",
+    "directory": "packages/create-agentiom-agent"
+  },
+  "homepage": "https://agentiom.dev"
+}

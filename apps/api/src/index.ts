@@ -1,14 +1,22 @@
 import { Hono } from 'hono';
 import { logger } from 'hono/logger';
 import { cors } from 'hono/cors';
-import { createLogger } from '@agentiom/logger';
+import { createLogger } from '@agentiom/shared';
 import { createDatabase } from '@agentiom/db';
 import { isAgentiomError } from '@agentiom/shared';
 import { AuthService } from './services/auth.service';
 import { AgentService } from './services/agent.service';
 import { DeployService } from './services/deploy.service';
+import { LifecycleService } from './services/lifecycle.service';
 import { createAuthRoutes } from './routes/auth';
 import { createAgentRoutes } from './routes/agents';
+import { lifecycleRoutes } from './routes/lifecycle.routes';
+import { webhookRoutes } from './routes/webhook.routes';
+import { triggerRoutes } from './routes/trigger.routes';
+import { demoRoutes } from './routes/demo.routes';
+import { createIdleMonitor } from './jobs/idle-monitor';
+import { createAuthMiddleware } from './middleware/auth';
+import type { Env } from './types';
 
 const log = createLogger('api');
 
@@ -40,13 +48,25 @@ const deployService = new DeployService(db, {
   flyApiToken: FLY_API_TOKEN,
   flyAppName: FLY_APP_NAME,
 });
+const lifecycleService = new LifecycleService(db, deployService.providers);
 
-// Create app
-const app = new Hono();
+// Start idle monitor
+const idleMonitor = createIdleMonitor(lifecycleService);
+idleMonitor.start();
+
+// Create app with typed context
+const app = new Hono<Env>();
 
 // Global middleware
 app.use('*', logger());
 app.use('*', cors());
+
+// Inject db and lifecycle into context for all routes
+app.use('*', async (c, next) => {
+  c.set('db', db);
+  c.set('lifecycle', lifecycleService);
+  await next();
+});
 
 // Global error handler
 app.onError((err, c) => {
@@ -85,9 +105,35 @@ app.get('/', (c) => {
   });
 });
 
-// Mount routes
+// Auth routes (public)
 app.route('/auth', createAuthRoutes(authService));
+
+// Agent routes (authenticated)
 app.route('/agents', createAgentRoutes(agentService, deployService, authService));
+
+// Create auth middleware for lifecycle/trigger routes
+const requireAuth = createAuthMiddleware(authService);
+
+// Lifecycle routes (authenticated) - /agents/:id/wake, /sleep, /status, /auto-sleep
+app.use('/agents/:id/wake', requireAuth);
+app.use('/agents/:id/sleep', requireAuth);
+app.use('/agents/:id/status', requireAuth);
+app.use('/agents/:id/auto-sleep', requireAuth);
+app.use('/agents/:id/activity', requireAuth);
+app.route('/agents', lifecycleRoutes);
+
+// Trigger routes (authenticated) - /agents/:id/triggers/*
+app.use('/agents/:id/triggers', requireAuth);
+app.use('/agents/:id/triggers/*', requireAuth);
+app.use('/agents/:id/wake-events', requireAuth);
+app.route('/agents', triggerRoutes);
+
+// Webhook routes - /webhooks/:agentId/:secret (public), generate-secret (authenticated)
+app.use('/webhooks/:agentId/generate-secret', requireAuth);
+app.route('/webhooks', webhookRoutes);
+
+// Demo routes (public) - for landing page live feed
+app.route('/demo', demoRoutes);
 
 log.info('API running on http://localhost:3000');
 

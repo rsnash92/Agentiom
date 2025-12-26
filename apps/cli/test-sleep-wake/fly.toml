@@ -1,0 +1,23 @@
+# Fly.io configuration for test-sleep-wake
+# https://fly.io/docs/reference/configuration/
+
+app = "agentiom-agents"
+primary_region = "iad"
+
+[build]
+# Uses Dockerfile in current directory
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[mounts]
+  source = "vol_test_sleep_wake"
+  destination = "/data"
+
+[env]
+  AGENT_NAME = "test-sleep-wake"
+  LOG_LEVEL = "INFO"

@@ -1,8 +1,7 @@
 /**
- * Database Schema
- *
- * Defines all database tables using Drizzle ORM.
- * Uses SQLite (Turso) for simplicity and edge compatibility.
+ * Database Schema - Phase 2
+ * 
+ * Includes sleep/wake and trigger fields for Phase 2 features.
  */
 
 import { sqliteTable, text, integer, real, index } from 'drizzle-orm/sqlite-core';
@@ -74,13 +73,14 @@ export const apiTokensRelations = relations(apiTokens, ({ one }) => ({
 }));
 
 // =============================================================================
-// Agents
+// Agents - With Phase 2 Sleep/Wake Fields
 // =============================================================================
 
 export const agentStatus = [
   'pending',
   'deploying',
   'running',
+  'sleeping',  // NEW: Agent is stopped but can be woken
   'stopped',
   'error',
   'destroyed',
@@ -98,18 +98,18 @@ export const agents = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
-    slug: text('slug').notNull().unique(), // URL-safe name for subdomain
+    slug: text('slug').notNull().unique(),
     description: text('description'),
 
     // Status
     status: text('status', { enum: agentStatus }).notNull().default('pending'),
 
-    // Infrastructure references (provider-agnostic IDs)
+    // Infrastructure references
     machineId: text('machine_id'),
     volumeId: text('volume_id'),
     dnsRecordId: text('dns_record_id'),
 
-    // Configuration (stored as JSON)
+    // Configuration (JSON)
     config: text('config', { mode: 'json' }),
 
     // Resource allocation
@@ -120,7 +120,37 @@ export const agents = sqliteTable(
     storageSizeGb: integer('storage_size_gb').notNull().default(1),
 
     // URLs
-    url: text('url'), // https://my-agent.agentiom.dev
+    url: text('url'),
+
+    // =========================================================================
+    // Phase 2: Sleep/Wake Fields
+    // =========================================================================
+    
+    // Activity tracking for auto-sleep
+    lastActivityAt: integer('last_activity_at', { mode: 'timestamp' }),
+    
+    // Auto-sleep configuration
+    idleTimeoutMins: integer('idle_timeout_mins').notNull().default(5),
+    autoSleep: integer('auto_sleep', { mode: 'boolean' }).notNull().default(true),
+    
+    // Wake tracking
+    lastWakeAt: integer('last_wake_at', { mode: 'timestamp' }),
+    lastSleepAt: integer('last_sleep_at', { mode: 'timestamp' }),
+    wakeCount: integer('wake_count').notNull().default(0),
+    
+    // =========================================================================
+    // Phase 2: Trigger Configuration
+    // =========================================================================
+    
+    // Webhook trigger secret (for verifying incoming webhooks)
+    webhookSecret: text('webhook_secret'),
+    
+    // Cron expression (if cron trigger enabled)
+    cronExpression: text('cron_expression'),
+    cronTimezone: text('cron_timezone').default('UTC'),
+    
+    // Email trigger (agent's email address)
+    emailAddress: text('email_address'), // e.g., my-agent@agentiom.dev
 
     // Timestamps
     createdAt: integer('created_at', { mode: 'timestamp' })
@@ -135,6 +165,8 @@ export const agents = sqliteTable(
     userIdIdx: index('agents_user_id_idx').on(table.userId),
     slugIdx: index('agents_slug_idx').on(table.slug),
     statusIdx: index('agents_status_idx').on(table.status),
+    lastActivityIdx: index('agents_last_activity_idx').on(table.lastActivityAt),
+    emailAddressIdx: index('agents_email_address_idx').on(table.emailAddress),
   })
 );
 
@@ -144,6 +176,9 @@ export const agentsRelations = relations(agents, ({ one, many }) => ({
     references: [users.id],
   }),
   deployments: many(deployments),
+  triggers: many(triggers),
+  wakeEvents: many(wakeEvents),
+  integrations: many(integrations),
 }));
 
 // =============================================================================
@@ -172,20 +207,13 @@ export const deployments = sqliteTable(
     userId: text('user_id')
       .notNull()
       .references(() => users.id),
-
     status: text('status', { enum: deploymentStatus })
       .notNull()
       .default('pending'),
-
-    // Deployment details
     imageTag: text('image_tag'),
     configSnapshot: text('config_snapshot', { mode: 'json' }),
-
-    // Error tracking
     errorMessage: text('error_message'),
     errorStack: text('error_stack'),
-
-    // Timestamps
     startedAt: integer('started_at', { mode: 'timestamp' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -210,7 +238,120 @@ export const deploymentsRelations = relations(deployments, ({ one }) => ({
 }));
 
 // =============================================================================
-// Usage (for billing)
+// Phase 2: Triggers
+// =============================================================================
+
+export const triggerType = [
+  'webhook',
+  'cron',
+  'email',
+  'api',
+] as const;
+
+export type TriggerType = (typeof triggerType)[number];
+
+export const triggers = sqliteTable(
+  'triggers',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    
+    type: text('type', { enum: triggerType }).notNull(),
+    
+    // Trigger-specific config (JSON)
+    config: text('config', { mode: 'json' }),
+    
+    // For cron triggers
+    cronExpression: text('cron_expression'),
+    cronTimezone: text('cron_timezone').default('UTC'),
+    nextRunAt: integer('next_run_at', { mode: 'timestamp' }),
+    
+    // For webhook triggers
+    webhookPath: text('webhook_path'), // e.g., /api/events
+    
+    // Enabled/disabled
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    
+    // Timestamps
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    lastTriggeredAt: integer('last_triggered_at', { mode: 'timestamp' }),
+  },
+  (table) => ({
+    agentIdIdx: index('triggers_agent_id_idx').on(table.agentId),
+    typeIdx: index('triggers_type_idx').on(table.type),
+    nextRunIdx: index('triggers_next_run_idx').on(table.nextRunAt),
+  })
+);
+
+export const triggersRelations = relations(triggers, ({ one }) => ({
+  agent: one(agents, {
+    fields: [triggers.agentId],
+    references: [agents.id],
+  }),
+}));
+
+// =============================================================================
+// Phase 2: Wake Events (audit log)
+// =============================================================================
+
+export const wakeEvents = sqliteTable(
+  'wake_events',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    triggerId: text('trigger_id')
+      .references(() => triggers.id, { onDelete: 'set null' }),
+    
+    // What caused the wake
+    triggerType: text('trigger_type', { enum: triggerType }).notNull(),
+    
+    // Context about the trigger
+    triggerContext: text('trigger_context', { mode: 'json' }),
+    
+    // How long did it take to wake (ms)?
+    wakeLatencyMs: integer('wake_latency_ms'),
+    
+    // Success/failure
+    success: integer('success', { mode: 'boolean' }).notNull().default(true),
+    errorMessage: text('error_message'),
+    
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    agentIdIdx: index('wake_events_agent_id_idx').on(table.agentId),
+    triggerTypeIdx: index('wake_events_trigger_type_idx').on(table.triggerType),
+    createdAtIdx: index('wake_events_created_at_idx').on(table.createdAt),
+  })
+);
+
+export const wakeEventsRelations = relations(wakeEvents, ({ one }) => ({
+  agent: one(agents, {
+    fields: [wakeEvents.agentId],
+    references: [agents.id],
+  }),
+  trigger: one(triggers, {
+    fields: [wakeEvents.triggerId],
+    references: [triggers.id],
+  }),
+}));
+
+// =============================================================================
+// Usage Records (for billing)
 // =============================================================================
 
 export const usageRecords = sqliteTable(
@@ -225,21 +366,13 @@ export const usageRecords = sqliteTable(
     agentId: text('agent_id').references(() => agents.id, {
       onDelete: 'set null',
     }),
-
-    // Usage type
     type: text('type', {
       enum: ['compute', 'storage', 'email', 'browser'],
     }).notNull(),
-
-    // Usage amount
     quantity: real('quantity').notNull(),
-    unit: text('unit').notNull(), // 'seconds', 'gb', 'requests'
-
-    // Billing period
+    unit: text('unit').notNull(),
     periodStart: integer('period_start', { mode: 'timestamp' }).notNull(),
     periodEnd: integer('period_end', { mode: 'timestamp' }).notNull(),
-
-    // Timestamps
     createdAt: integer('created_at', { mode: 'timestamp' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -254,13 +387,181 @@ export const usageRecords = sqliteTable(
   })
 );
 
-export const usageRecordsRelations = relations(usageRecords, ({ one }) => ({
-  user: one(users, {
-    fields: [usageRecords.userId],
-    references: [users.id],
+// =============================================================================
+// Platform Integrations (Slack, Discord, Telegram, etc.)
+// =============================================================================
+
+export const integrationPlatform = [
+  'slack',
+  'discord',
+  'telegram',
+  'custom_websocket',
+] as const;
+
+export type IntegrationPlatform = (typeof integrationPlatform)[number];
+
+export const integrationStatus = [
+  'pending',      // Created but not connected
+  'connecting',   // Attempting to establish connection
+  'connected',    // Socket active and listening
+  'disconnected', // Connection dropped, will retry
+  'error',        // Failed, needs user intervention
+  'disabled',     // Manually disabled
+] as const;
+
+export type IntegrationStatus = (typeof integrationStatus)[number];
+
+export const integrations = sqliteTable(
+  'integrations',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+
+    // Platform type
+    platform: text('platform', { enum: integrationPlatform }).notNull(),
+
+    // Human-readable name (e.g., "Production Slack Workspace")
+    name: text('name').notNull(),
+
+    // Connection status
+    status: text('status', { enum: integrationStatus }).notNull().default('pending'),
+    statusMessage: text('status_message'), // Error details, etc.
+
+    // ==========================================================================
+    // Platform-specific credentials (encrypted in production)
+    // ==========================================================================
+
+    // Slack
+    slackAppToken: text('slack_app_token'),       // xapp-... (Socket Mode)
+    slackBotToken: text('slack_bot_token'),       // xoxb-... (API calls)
+    slackTeamId: text('slack_team_id'),           // Workspace ID
+    slackTeamName: text('slack_team_name'),       // Workspace name
+
+    // Discord
+    discordBotToken: text('discord_bot_token'),   // Bot token
+    discordGuildId: text('discord_guild_id'),     // Server ID (optional, for single-server bots)
+    discordApplicationId: text('discord_application_id'),
+
+    // Telegram
+    telegramBotToken: text('telegram_bot_token'), // Bot token from @BotFather
+    telegramWebhookSecret: text('telegram_webhook_secret'), // For webhook verification
+
+    // Custom WebSocket
+    customWsUrl: text('custom_ws_url'),           // wss://...
+    customWsHeaders: text('custom_ws_headers', { mode: 'json' }), // Auth headers
+
+    // ==========================================================================
+    // Event routing configuration
+    // ==========================================================================
+
+    // Which endpoint to hit when events arrive
+    webhookPath: text('webhook_path').default('/webhook'),
+
+    // Event filtering (JSON array of event types to forward)
+    // e.g., ["message", "app_mention"] for Slack
+    eventFilter: text('event_filter', { mode: 'json' }),
+
+    // ==========================================================================
+    // Connection tracking
+    // ==========================================================================
+
+    lastConnectedAt: integer('last_connected_at', { mode: 'timestamp' }),
+    lastDisconnectedAt: integer('last_disconnected_at', { mode: 'timestamp' }),
+    lastEventAt: integer('last_event_at', { mode: 'timestamp' }),
+
+    // Stats
+    eventsReceived: integer('events_received').notNull().default(0),
+    eventsDelivered: integer('events_delivered').notNull().default(0),
+    eventsFailed: integer('events_failed').notNull().default(0),
+
+    // Retry tracking
+    retryCount: integer('retry_count').notNull().default(0),
+    nextRetryAt: integer('next_retry_at', { mode: 'timestamp' }),
+
+    // Timestamps
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    agentIdIdx: index('integrations_agent_id_idx').on(table.agentId),
+    platformIdx: index('integrations_platform_idx').on(table.platform),
+    statusIdx: index('integrations_status_idx').on(table.status),
+  })
+);
+
+export const integrationsRelations = relations(integrations, ({ one }) => ({
+  agent: one(agents, {
+    fields: [integrations.agentId],
+    references: [agents.id],
+  }),
+}));
+
+// =============================================================================
+// Integration Events (Audit Log)
+// =============================================================================
+
+export const integrationEvents = sqliteTable(
+  'integration_events',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    integrationId: text('integration_id')
+      .notNull()
+      .references(() => integrations.id, { onDelete: 'cascade' }),
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+
+    // Event type from the platform
+    eventType: text('event_type').notNull(), // e.g., "message", "app_mention"
+
+    // Raw event payload (for debugging)
+    payload: text('payload', { mode: 'json' }),
+
+    // Delivery status
+    delivered: integer('delivered', { mode: 'boolean' }).notNull().default(false),
+    deliveredAt: integer('delivered_at', { mode: 'timestamp' }),
+
+    // If we had to wake the agent
+    agentWasAsleep: integer('agent_was_asleep', { mode: 'boolean' }).notNull().default(false),
+    wakeLatencyMs: integer('wake_latency_ms'),
+
+    // Response from agent (if any)
+    responsePayload: text('response_payload', { mode: 'json' }),
+    responseSentAt: integer('response_sent_at', { mode: 'timestamp' }),
+
+    // Error tracking
+    errorMessage: text('error_message'),
+    retryCount: integer('retry_count').notNull().default(0),
+
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    integrationIdIdx: index('integration_events_integration_id_idx').on(table.integrationId),
+    agentIdIdx: index('integration_events_agent_id_idx').on(table.agentId),
+    eventTypeIdx: index('integration_events_event_type_idx').on(table.eventType),
+    createdAtIdx: index('integration_events_created_at_idx').on(table.createdAt),
+  })
+);
+
+export const integrationEventsRelations = relations(integrationEvents, ({ one }) => ({
+  integration: one(integrations, {
+    fields: [integrationEvents.integrationId],
+    references: [integrations.id],
   }),
   agent: one(agents, {
-    fields: [usageRecords.agentId],
+    fields: [integrationEvents.agentId],
     references: [agents.id],
   }),
 }));
