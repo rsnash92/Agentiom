@@ -39,7 +39,7 @@
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
     "@manypkg/cli": "^0.21.4",
-    "@types/bun": "latest",
+    "bun-types": "latest",
     "turbo": "^2.3.0",
     "typescript": "^5.7.2"
   },

@@ -1,7 +1,7 @@
 {
   "extends": "@agentiom/typescript-config/app.json",
   "compilerOptions": {
-    "types": ["bun", "node"]
+    "types": ["bun-types", "node"]
   },
   "include": ["src"],
   "exclude": ["node_modules"]
