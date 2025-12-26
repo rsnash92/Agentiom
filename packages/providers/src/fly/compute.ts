@@ -73,7 +73,7 @@ export class FlyComputeProvider implements IComputeProvider {
 
   async listMachines(): Promise<Machine[]> {
     const response = await this.client.get(`/apps/${this.appName}/machines`);
-    return response.map((m: unknown) => this.mapMachine(m));
+    return (response as unknown[]).map((m: unknown) => this.mapMachine(m));
   }
 
   async startMachine(machineId: string): Promise<Machine> {
@@ -101,7 +101,7 @@ export class FlyComputeProvider implements IComputeProvider {
     const response = await this.client.post(
       `/apps/${this.appName}/machines/${machineId}/exec`,
       { command }
-    );
+    ) as { exit_code: number; stdout?: string; stderr?: string };
 
     return {
       exitCode: response.exit_code,
