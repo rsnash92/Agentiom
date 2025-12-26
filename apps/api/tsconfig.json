@@ -1,7 +1,18 @@
 {
   "extends": "@agentiom/typescript-config/app.json",
   "compilerOptions": {
-    "types": ["bun-types", "node"]
+    "types": ["bun-types", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "@agentiom/db": ["../../packages/db/src/index.ts"],
+      "@agentiom/db/*": ["../../packages/db/src/*"],
+      "@agentiom/shared": ["../../packages/shared/src/index.ts"],
+      "@agentiom/shared/*": ["../../packages/shared/src/*"],
+      "@agentiom/providers": ["../../packages/providers/src/index.ts"],
+      "@agentiom/providers/*": ["../../packages/providers/src/*"],
+      "@agentiom/logger": ["../../packages/logger/src/index.ts"],
+      "@agentiom/logger/*": ["../../packages/logger/src/*"]
+    }
   },
   "include": ["src"],
   "exclude": ["node_modules"]
