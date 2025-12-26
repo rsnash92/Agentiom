@@ -615,6 +615,8 @@ export class DeployService {
         AGENT_ID: agent.id,
         AGENT_NAME: agent.name,
         AGENT_SLUG: agent.slug,
+        AGENTIOM_STATE_PATH: VOLUME_MOUNT_PATH,  // Tell SDK where to persist state
+        AGENTIOM_AGENT_NAME: agent.name,
         ...env,
       },
       volumeMounts: [
