@@ -1,11 +1,11 @@
 # Fly.io configuration for Agentiom API
-# Deploy with: fly deploy --config apps/api/fly.toml
+# Deploy with: fly deploy (from repo root)
 
 app = "agentiom-api"
 primary_region = "iad"
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = "apps/api/Dockerfile"
 
 [env]
   NODE_ENV = "production"

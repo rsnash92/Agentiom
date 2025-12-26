@@ -1,36 +1,34 @@
 # Agentiom API Dockerfile
-# Multi-stage build for minimal image size
+# Build from monorepo root: docker build -f apps/api/Dockerfile .
 
 FROM oven/bun:1 AS base
 WORKDIR /app
 
-# Install dependencies
+# Install ALL dependencies (including dev for workspace packages)
 FROM base AS deps
-COPY package.json bun.lock* ./
+COPY package.json bun.lock ./
 COPY packages/db/package.json ./packages/db/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/providers/package.json ./packages/providers/
 COPY packages/logger/package.json ./packages/logger/
+COPY tooling/typescript/package.json ./tooling/typescript/
 COPY apps/api/package.json ./apps/api/
-RUN bun install --frozen-lockfile
+RUN bun install
 
-# Build stage
-FROM base AS builder
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN bun run build --filter=@agentiom/api
-
-# Production stage
-FROM oven/bun:1-slim AS runner
+# Production stage - run source directly with bun
+FROM oven/bun:1 AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Copy built assets
-COPY --from=builder /app/apps/api/dist ./dist
-COPY --from=builder /app/apps/api/package.json ./
+# Copy everything needed to run
+COPY --from=deps /app/node_modules ./node_modules
+COPY packages ./packages
+COPY apps/api ./apps/api
 
-# Run the API
+WORKDIR /app/apps/api
+
+# Run the API directly from source (bun handles TS natively)
 EXPOSE 3000
-CMD ["bun", "run", "dist/index.js"]
+CMD ["bun", "run", "src/index.ts"]
