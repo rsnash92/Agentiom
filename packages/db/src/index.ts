@@ -24,17 +24,5 @@
 export { createDatabase, schema } from './client';
 export type { DatabaseClient } from './client';
 
-// Re-export schema types
-export type {
-  AgentStatus,
-  DeploymentStatus,
-} from './schema';
-
-// Re-export table types
-export {
-  users,
-  apiTokens,
-  agents,
-  deployments,
-  usageRecords,
-} from './schema';
+// Re-export everything from schema
+export * from './schema';
