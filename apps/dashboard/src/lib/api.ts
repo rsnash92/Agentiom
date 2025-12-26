@@ -136,7 +136,7 @@ class ApiClient {
       `/agents/${id}/wake`,
       {
         method: 'POST',
-        body: JSON.stringify({ triggerType: 'dashboard' }),
+        body: JSON.stringify({ triggerType: 'api' }),
       }
     );
   }
