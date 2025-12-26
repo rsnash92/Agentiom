@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd ../.. && turbo build --filter=@agentiom/dashboard",
+  "installCommand": "cd ../.. && bun install",
+  "framework": "nextjs"
+}
