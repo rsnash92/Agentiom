@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Sidebar,
   Header,
@@ -47,8 +48,17 @@ function mapStatus(status: Agent['status']): 'running' | 'stopped' | 'error' {
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
+  const router = useRouter();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(true);
+  const [isMainDomain, setIsMainDomain] = useState(false);
+
+  useEffect(() => {
+    // Check if we're on the main marketing domain (agentiom.com) vs app subdomain (app.agentiom.com)
+    const hostname = window.location.hostname;
+    const isMain = hostname === 'agentiom.com' || hostname === 'www.agentiom.com' || hostname === 'localhost';
+    setIsMainDomain(isMain);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -59,6 +69,16 @@ export default function DashboardPage() {
     }
   }, [user]);
 
+  useEffect(() => {
+    // Redirect to login on app subdomain if not authenticated
+    if (!loading && !user && !isMainDomain) {
+      const hostname = window.location.hostname;
+      if (hostname.startsWith('app.') || hostname.includes('app.agentiom')) {
+        router.push('/login');
+      }
+    }
+  }, [loading, user, isMainDomain, router]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
@@ -67,8 +87,16 @@ export default function DashboardPage() {
     );
   }
 
-  // Show landing page for unauthenticated users
+  // Show landing page for unauthenticated users on main domain
   if (!user) {
+    // On app subdomain, show loading while redirecting to login
+    if (!isMainDomain) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
+          <div className="text-gray-500">Loading...</div>
+        </div>
+      );
+    }
     return <LandingPage />;
   }
 
