@@ -114,6 +114,16 @@ export class FlyComputeProvider implements IComputeProvider {
     machineId: string,
     options?: LogOptions
   ): AsyncIterable<LogEntry> {
+    // For non-streaming requests, use the GraphQL API for recent logs
+    if (!options?.follow) {
+      const logs = await this.fetchRecentLogs(machineId);
+      for (const log of logs) {
+        yield log;
+      }
+      return;
+    }
+
+    // For streaming/follow mode, use the NATS-based machine logs endpoint
     const params = new URLSearchParams();
     if (options?.since) {
       params.set('since', options.since.toISOString());
@@ -128,6 +138,97 @@ export class FlyComputeProvider implements IComputeProvider {
         yield this.parseLogEntry(line);
       }
     }
+  }
+
+  /**
+   * Fetch recent logs via Fly.io GraphQL API
+   */
+  private async fetchRecentLogs(machineId: string): Promise<LogEntry[]> {
+    const query = `
+      query GetAppLogs($appName: String!, $instanceId: String) {
+        app(name: $appName) {
+          logs(instance: $instanceId, limit: 50) {
+            nodes {
+              timestamp
+              level
+              message
+              instance
+            }
+          }
+        }
+      }
+    `;
+
+    try {
+      const response = await fetch('https://api.fly.io/graphql', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.client['token']}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query,
+          variables: {
+            appName: this.appName,
+            instanceId: machineId,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        console.error(`GraphQL logs request failed: ${response.status}`);
+        return this.getFallbackLogs(machineId);
+      }
+
+      const data = await response.json() as {
+        data?: {
+          app?: {
+            logs?: {
+              nodes?: Array<{
+                timestamp: string;
+                level: string;
+                message: string;
+                instance: string;
+              }>;
+            };
+          };
+        };
+        errors?: Array<{ message: string }>;
+      };
+
+      if (data.errors) {
+        console.error('GraphQL errors:', data.errors);
+        return this.getFallbackLogs(machineId);
+      }
+
+      const nodes = data.data?.app?.logs?.nodes ?? [];
+
+      return nodes.map((node) => ({
+        timestamp: new Date(node.timestamp),
+        level: node.level?.toLowerCase() || 'info',
+        message: node.message,
+      }));
+    } catch (error) {
+      console.error('Error fetching logs via GraphQL:', error);
+      return this.getFallbackLogs(machineId);
+    }
+  }
+
+  /**
+   * Fallback logs when API fails
+   */
+  private async getFallbackLogs(machineId: string): Promise<LogEntry[]> {
+    // Get machine status to provide some context
+    const machine = await this.getMachine(machineId);
+    const status = machine?.state || 'unknown';
+
+    return [
+      {
+        timestamp: new Date(),
+        level: 'info',
+        message: `Machine ${machineId} is ${status}. Logs will appear when the agent outputs to stdout/stderr.`,
+      },
+    ];
   }
 
   async waitForState(

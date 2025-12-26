@@ -48,10 +48,14 @@ export default function AgentDetailPage() {
       const { agent } = await api.getAgent(agentId);
       setAgent(agent);
 
-      // Fetch logs if running
-      if (agent.status === 'running') {
-        const { logs } = await api.getAgentLogs(agentId);
-        setLogs(logs);
+      // Fetch logs if agent has been deployed (has machineId)
+      if (agent.machineId) {
+        try {
+          const { logs } = await api.getAgentLogs(agentId);
+          setLogs(logs);
+        } catch (logError) {
+          console.error('Failed to fetch logs:', logError);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch agent:', error);
@@ -306,18 +310,26 @@ export default function AgentDetailPage() {
               </button>
             </div>
             <div className="font-mono text-xs bg-gray-900 text-gray-300 p-4 rounded max-h-64 overflow-y-auto">
-              {logs.length === 0 ? (
+              {!agent.machineId ? (
                 <p className="text-gray-500">
-                  {agent.status === 'running'
-                    ? 'No logs available yet.'
-                    : 'Start the agent to see logs.'}
+                  Deploy the agent to see logs.
+                </p>
+              ) : logs.length === 0 ? (
+                <p className="text-gray-500">
+                  {agent.status === 'sleeping'
+                    ? 'Agent is sleeping. Wake it to see new logs.'
+                    : agent.status === 'running'
+                    ? 'Waiting for logs...'
+                    : 'No logs available.'}
                 </p>
               ) : (
                 <div className="space-y-1">
                   {logs.slice(-20).map((log, i) => (
                     <p key={i}>
                       <span className="text-gray-500">[{formatTimestamp(log.timestamp)}]</span>{' '}
-                      <span className={levelColors[log.level] || 'text-gray-300'}>{log.level}</span>{' '}
+                      <span className={levelColors[log.level.toUpperCase()] || 'text-gray-300'}>
+                        {log.level.toUpperCase()}
+                      </span>{' '}
                       {log.message}
                     </p>
                   ))}
