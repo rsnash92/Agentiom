@@ -22,6 +22,7 @@ const log = createLogger('api');
 
 // Environment validation
 const DATABASE_URL = process.env.DATABASE_URL ?? 'file:local.db';
+const DATABASE_AUTH_TOKEN = process.env.DATABASE_AUTH_TOKEN;
 const JWT_SECRET = process.env.JWT_SECRET;
 const FLY_API_TOKEN = process.env.FLY_API_TOKEN;
 const FLY_APP_NAME = process.env.FLY_APP_NAME;
@@ -39,7 +40,7 @@ if (FLY_API_TOKEN && FLY_APP_NAME) {
 }
 
 // Initialize database
-const db = createDatabase(DATABASE_URL);
+const db = createDatabase(DATABASE_URL, DATABASE_AUTH_TOKEN);
 
 // Initialize services
 const authService = new AuthService(db, JWT_SECRET);
