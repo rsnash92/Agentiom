@@ -6,6 +6,7 @@
 
 import type { DatabaseClient } from '@agentiom/db';
 import type { LifecycleService } from './services/lifecycle.service';
+import type { ActivityService } from './services/activity.service';
 
 export interface User {
   id: string;
@@ -17,5 +18,6 @@ export interface Env {
     db: DatabaseClient;
     user: User;
     lifecycle: LifecycleService;
+    activity: ActivityService;
   };
 }

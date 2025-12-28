@@ -47,5 +47,8 @@
   "packageManager": "bun@1.1.38",
   "engines": {
     "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2"
   }
 }

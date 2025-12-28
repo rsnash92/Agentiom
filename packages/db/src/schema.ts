@@ -565,3 +565,56 @@ export const integrationEventsRelations = relations(integrationEvents, ({ one })
     references: [agents.id],
   }),
 }));
+
+// =============================================================================
+// Activity Logs (Unified event log for agent activity)
+// =============================================================================
+
+export const activityType = [
+  'wake',
+  'sleep',
+  'request',
+  'response',
+  'state_save',
+  'error',
+] as const;
+
+export type ActivityType = (typeof activityType)[number];
+
+export const activityLogs = sqliteTable(
+  'activity_logs',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+
+    // Event type
+    type: text('type', { enum: activityType }).notNull(),
+
+    // Human-readable message
+    message: text('message').notNull(),
+
+    // Additional context (JSON)
+    metadata: text('metadata', { mode: 'json' }),
+
+    // Timestamp
+    createdAt: text('created_at')
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (table) => ({
+    agentIdIdx: index('activity_logs_agent_id_idx').on(table.agentId),
+    typeIdx: index('activity_logs_type_idx').on(table.type),
+    createdAtIdx: index('activity_logs_created_at_idx').on(table.createdAt),
+  })
+);
+
+export const activityLogsRelations = relations(activityLogs, ({ one }) => ({
+  agent: one(agents, {
+    fields: [activityLogs.agentId],
+    references: [agents.id],
+  }),
+}));

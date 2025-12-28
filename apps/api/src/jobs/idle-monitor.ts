@@ -8,6 +8,7 @@
  */
 
 import type { LifecycleService } from '../services/lifecycle.service';
+import type { ActivityService } from '../services/activity.service';
 import { createLogger } from '@agentiom/shared';
 
 const log = createLogger('idle-monitor');
@@ -23,6 +24,7 @@ export class IdleMonitor {
 
   constructor(
     private lifecycle: LifecycleService,
+    private activity: ActivityService | null = null,
     private config: IdleMonitorConfig = { intervalMs: 60000, enabled: true }
   ) {}
 
@@ -78,11 +80,38 @@ export class IdleMonitor {
     this.isRunning = true;
 
     try {
-      const result = await this.lifecycle.sleepIdleAgents();
+      // Get idle agents first so we can log them
+      const idleAgentIds = await this.lifecycle.findIdleAgents();
 
-      if (result.slept > 0 || result.failed > 0) {
+      if (idleAgentIds.length === 0) {
+        this.isRunning = false;
+        return;
+      }
+
+      log.info({ count: idleAgentIds.length }, 'Found idle agents to sleep');
+
+      let slept = 0;
+      let failed = 0;
+
+      for (const agentId of idleAgentIds) {
+        const result = await this.lifecycle.sleep(agentId);
+        if (result.success) {
+          slept++;
+          // Log the sleep event
+          if (this.activity) {
+            await this.activity.logSleep(agentId, 'Idle timeout');
+          }
+        } else {
+          failed++;
+          if (this.activity) {
+            await this.activity.logError(agentId, `Failed to sleep: ${result.error}`);
+          }
+        }
+      }
+
+      if (slept > 0 || failed > 0) {
         log.info(
-          { slept: result.slept, failed: result.failed },
+          { slept, failed },
           'Idle monitor tick completed'
         );
       }
@@ -106,12 +135,17 @@ export class IdleMonitor {
  */
 export function createIdleMonitor(
   lifecycle: LifecycleService,
+  activity?: ActivityService,
   config?: Partial<IdleMonitorConfig>
 ): IdleMonitor {
-  const monitor = new IdleMonitor(lifecycle, {
-    intervalMs: config?.intervalMs ?? 60000,
-    enabled: config?.enabled ?? true,
-  });
+  const monitor = new IdleMonitor(
+    lifecycle,
+    activity || null,
+    {
+      intervalMs: config?.intervalMs ?? 60000,
+      enabled: config?.enabled ?? true,
+    }
+  );
 
   return monitor;
 }

@@ -9,3 +9,4 @@ export { PixelBackground } from './pixel-background';
 export { CornerBorderBox } from './corner-border-box';
 export { AnimatedTerminal } from './animated-terminal';
 export { LandingPage } from './landing-page';
+export { ActivityFeed } from './activity-feed';

@@ -1,10 +1,5 @@
-/**
- * Main Python Template
- */
-
-export function getMainPy(name: string): string {
-  return `"""
-Agentiom Agent: ${name}
+"""
+Agentiom Agent: slack-assistant
 
 A stateful agent that remembers data across sleep/wake cycles.
 State is persisted to /data/state.json on the attached volume.
@@ -37,7 +32,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-AGENT_NAME = os.getenv('AGENTIOM_AGENT_NAME', os.getenv('AGENT_NAME', '${name}'))
+AGENT_NAME = os.getenv('AGENTIOM_AGENT_NAME', os.getenv('AGENT_NAME', 'slack-assistant'))
 PORT = int(os.getenv('PORT', '8080'))
 STATE_PATH = Path(os.getenv('AGENTIOM_STATE_PATH', '/data')) / 'state.json'
 
@@ -130,7 +125,7 @@ Your name is {AGENT_NAME}.
 
 Key traits:
 - Be concise and helpful
-- Use Slack-friendly formatting (bold with *text*, code with \`code\`, lists with •)
+- Use Slack-friendly formatting (bold with *text*, code with `code`, lists with •)
 - Keep responses under 2000 characters
 - Remember information users tell you - it will be saved to your persistent state
 - If a user tells you their name or preferences, acknowledge that you'll remember it
@@ -296,5 +291,3 @@ if __name__ == '__main__':
         HTTPServer(('0.0.0.0', PORT), AgentHandler).serve_forever()
     except KeyboardInterrupt:
         shutdown_handler(None, None)
-`;
-}

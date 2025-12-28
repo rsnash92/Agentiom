@@ -8,12 +8,14 @@ import { AuthService } from './services/auth.service';
 import { AgentService } from './services/agent.service';
 import { DeployService } from './services/deploy.service';
 import { LifecycleService } from './services/lifecycle.service';
+import { createActivityService } from './services/activity.service';
 import { createAuthRoutes } from './routes/auth';
 import { createAgentRoutes } from './routes/agents';
 import { lifecycleRoutes } from './routes/lifecycle.routes';
 import { webhookRoutes } from './routes/webhook.routes';
 import { triggerRoutes } from './routes/trigger.routes';
 import { demoRoutes } from './routes/demo.routes';
+import { proxyRoutes } from './routes/proxy.routes';
 import { createIdleMonitor } from './jobs/idle-monitor';
 import { createAuthMiddleware } from './middleware/auth';
 import type { Env } from './types';
@@ -25,7 +27,8 @@ const DATABASE_URL = process.env.DATABASE_URL ?? 'file:local.db';
 const DATABASE_AUTH_TOKEN = process.env.DATABASE_AUTH_TOKEN;
 const JWT_SECRET = process.env.JWT_SECRET;
 const FLY_API_TOKEN = process.env.FLY_API_TOKEN;
-const FLY_APP_NAME = process.env.FLY_APP_NAME;
+// Use AGENTIOM_FLY_APP_NAME to avoid conflict with Fly.io's auto-injected FLY_APP_NAME
+const FLY_APP_NAME = process.env.AGENTIOM_FLY_APP_NAME || process.env.FLY_AGENTS_APP_NAME;
 
 if (!JWT_SECRET) {
   log.error('JWT_SECRET environment variable is required');
@@ -50,9 +53,10 @@ const deployService = new DeployService(db, {
   flyAppName: FLY_APP_NAME,
 });
 const lifecycleService = new LifecycleService(db, deployService.providers);
+const activityService = createActivityService(db);
 
 // Start idle monitor
-const idleMonitor = createIdleMonitor(lifecycleService);
+const idleMonitor = createIdleMonitor(lifecycleService, activityService);
 idleMonitor.start();
 
 // Create app with typed context
@@ -70,10 +74,11 @@ app.use('*', cors({
   credentials: true,
 }));
 
-// Inject db and lifecycle into context for all routes
+// Inject db, lifecycle, and activity services into context for all routes
 app.use('*', async (c, next) => {
   c.set('db', db);
   c.set('lifecycle', lifecycleService);
+  c.set('activity', activityService);
   await next();
 });
 
@@ -116,6 +121,11 @@ app.get('/', (c) => {
 
 // Auth routes (public)
 app.route('/auth', createAuthRoutes(authService));
+
+// Proxy routes (public) - MUST be before agent routes to avoid auth middleware
+// Routes requests to agent machines with wake-on-request
+// Usage: /agents/:slug/proxy/* or /agents/:slug/webhook
+app.route('/agents', proxyRoutes);
 
 // Agent routes (authenticated)
 app.route('/agents', createAgentRoutes(agentService, deployService, authService));

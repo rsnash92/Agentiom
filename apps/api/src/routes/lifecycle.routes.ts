@@ -11,8 +11,8 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
-import { agents } from '@agentiom/db/schema';
+import { eq, desc } from 'drizzle-orm';
+import { agents, activityLogs } from '@agentiom/db/schema';
 import type { Env } from '../types';
 
 const lifecycleRoutes = new Hono<Env>();
@@ -227,6 +227,42 @@ lifecycleRoutes.post('/:id/activity', async (c) => {
   await lifecycle.recordActivity(agentId);
 
   return c.json({ success: true });
+});
+
+// =============================================================================
+// GET /agents/:id/activity - Get activity log
+// =============================================================================
+
+lifecycleRoutes.get('/:id/activity', async (c) => {
+  const agentId = c.req.param('id');
+  const db = c.get('db');
+  const user = c.get('user');
+  const limit = Number(c.req.query('limit') || 50);
+
+  // Verify agent ownership
+  const [agent] = await db
+    .select({ userId: agents.userId })
+    .from(agents)
+    .where(eq(agents.id, agentId))
+    .limit(1);
+
+  if (!agent) {
+    return c.json({ error: 'Agent not found' }, 404);
+  }
+
+  if (agent.userId !== user.id) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+
+  // Get activity logs
+  const activities = await db
+    .select()
+    .from(activityLogs)
+    .where(eq(activityLogs.agentId, agentId))
+    .orderBy(desc(activityLogs.createdAt))
+    .limit(limit);
+
+  return c.json({ activities });
 });
 
 export { lifecycleRoutes };

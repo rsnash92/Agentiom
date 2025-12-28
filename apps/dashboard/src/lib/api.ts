@@ -154,6 +154,10 @@ class ApiClient {
     return this.fetch<{ logs: LogEntry[] }>(`/agents/${id}/logs`);
   }
 
+  async getAgentActivity(id: string, limit = 50) {
+    return this.fetch<{ activities: Activity[] }>(`/agents/${id}/activity?limit=${limit}`);
+  }
+
   // API Tokens
   async listTokens() {
     return this.fetch<{ tokens: ApiToken[] }>('/auth/tokens');
@@ -206,6 +210,20 @@ export interface LogEntry {
   timestamp: string;
   level: string;
   message: string;
+}
+
+export interface Activity {
+  id: string;
+  agentId: string;
+  type: 'wake' | 'sleep' | 'request' | 'response' | 'state_save' | 'error';
+  message: string;
+  metadata?: {
+    latencyMs?: number;
+    trigger?: string;
+    source?: string;
+    error?: string;
+  };
+  createdAt: string;
 }
 
 export interface ApiToken {

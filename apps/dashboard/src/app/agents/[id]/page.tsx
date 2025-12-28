@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Sidebar, Header, BracketCard, StatCard } from '@/components';
+import { Sidebar, Header, BracketCard, StatCard, ActivityFeed } from '@/components';
 import { useAuth } from '@/lib/auth-context';
 import { api, Agent, LogEntry } from '@/lib/api';
 
@@ -352,6 +352,14 @@ export default function AgentDetailPage() {
                 </div>
               )}
             </div>
+          </BracketCard>
+        </div>
+
+        {/* Activity Feed */}
+        <div className="mt-6">
+          <BracketCard>
+            <h2 className="text-sm font-semibold text-gray-900 mb-4">Recent Activity</h2>
+            <ActivityFeed agentId={agentId} />
           </BracketCard>
         </div>
       </main>

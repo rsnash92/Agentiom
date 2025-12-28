@@ -1,0 +1,23 @@
+# Fly.io configuration for my-stateful-agent
+# https://fly.io/docs/reference/configuration/
+
+app = "agentiom-agents"
+primary_region = "iad"
+
+[build]
+# Uses Dockerfile in current directory
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[mounts]
+  source = "vol_my_stateful_agent"
+  destination = "/data"
+
+[env]
+  AGENT_NAME = "my-stateful-agent"
+  LOG_LEVEL = "INFO"

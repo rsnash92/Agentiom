@@ -1,0 +1,25 @@
+# Agentiom Slack Proxy
+# This app must stay running to maintain the Slack WebSocket connection
+
+app = 'agentiom-slack-proxy'
+primary_region = 'lhr'
+
+[build]
+
+[env]
+  NODE_ENV = 'production'
+  # AGENTIOM_API_URL is set via secrets
+
+# No HTTP service needed - this is a Socket Mode (WebSocket client) app
+# We don't expose an HTTP endpoint, we just connect to Slack's WebSocket
+
+[processes]
+  app = "bun run dist/index.js"
+
+# Keep exactly 1 machine running (Socket Mode doesn't need redundancy)
+# Having 2 machines would cause duplicate message handling
+
+[[vm]]
+  memory = '256mb'
+  cpu_kind = 'shared'
+  cpus = 1
